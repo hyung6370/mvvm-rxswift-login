@@ -13,6 +13,10 @@ import RxCocoa
 import Firebase
 import GoogleSignIn
 import FirebaseAuth
+import FirebaseDatabaseInternal
+import AuthenticationServices
+import Crypto
+
 
 class RootViewController: UIViewController {
     
@@ -21,6 +25,8 @@ class RootViewController: UIViewController {
     
     let userEmail = "test@test.com"
     let userPassword = "test123"
+    
+    fileprivate var currentNonce: String?
     
     // Properties
     private let titleLabel = UILabel().then {
@@ -198,43 +204,149 @@ class RootViewController: UIViewController {
             }
         ).disposed(by: disposeBag)
         
+        
+        // MARK: - Google Login
         googleButton.rx.tap.subscribe(
             onNext: { [weak self] in
                 self?.handleGoogleLogin()
             }).disposed(by: disposeBag)
         
         
-        
-        
-        // MARK: - Google Login
-        
-        
-        
         // MARK: - Kakao Login
         
         
+        
         // MARK: - Apple Login
+        appleButton.rx.tap.subscribe(
+            onNext: { [weak self] in
+                self?.startSignInWithAppleFlow()
+            }).disposed(by: disposeBag)
+        
+        
         
     }
     
     private func handleGoogleLogin() {
         guard let clientID = FirebaseApp.app()?.options.clientID else { return }
-        
+
         let config = GIDConfiguration(clientID: clientID)
         GIDSignIn.sharedInstance.configuration = config
-        
+
         GIDSignIn.sharedInstance.signIn(withPresenting: self) { [unowned self] result, error in
-            guard error == nil else {
+        guard error == nil else {
+            return
+        }
+
+        guard let user = result?.user, let idToken = user.idToken?.tokenString else {
+            return
+        }
+        let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: user.accessToken.tokenString)
+
+            Auth.auth().signIn(with: credential) { authResult, error in
+                guard let authUser = authResult?.user, error == nil else {
+                    return
+                }
+                
+                let ref = Database.database().reference()
+                ref.child("users").child(authUser.uid).setValue(["email": authUser.email])
+                
+                let homeVC = HomeViewController()
+                self.navigationController?.pushViewController(homeVC, animated: true)
+            }
+        }
+    }
+}
+
+// MARK: - Apple Login
+@available(iOS 13.0, *)
+extension RootViewController: ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        return self.view.window!
+    }
+    
+    private func sha256(_ input: String) -> String {
+        let inputData = Data(input.utf8)
+        let hashedData = SHA256.hash(data: inputData)
+        let hashString = hashedData.compactMap {
+            String(format: "%02x", $0)
+        }.joined()
+        
+        return hashString
+    }
+    
+    func startSignInWithAppleFlow() {
+        let nonce = randomNonceString()
+        currentNonce = nonce
+        let appleIDProvider = ASAuthorizationAppleIDProvider()
+        let request = appleIDProvider.createRequest()
+        request.requestedScopes = [.fullName, .email]
+        request.nonce = sha256(nonce)
+
+        let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+        authorizationController.delegate = self
+        authorizationController.presentationContextProvider = self
+        authorizationController.performRequests()
+    }
+    
+    private func randomNonceString(length: Int = 32) -> String {
+        precondition(length > 0)
+        var randomBytes = [UInt8](repeating: 0, count: length)
+        let errorCode = SecRandomCopyBytes(kSecRandomDefault, randomBytes.count, &randomBytes)
+        if errorCode != errSecSuccess {
+        fatalError(
+          "Unable to generate nonce. SecRandomCopyBytes failed with OSStatus \(errorCode)"
+        )
+        }
+
+        let charset: [Character] =
+        Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
+
+        let nonce = randomBytes.map { byte in
+        // Pick a random character from the set, wrapping around if needed.
+        charset[Int(byte) % charset.count]
+        }
+
+        return String(nonce)
+    }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        if let appleIDCredential = authorization.credential as? ASAuthorizationAppleIDCredential {
+            guard let nonce = currentNonce else {
+                fatalError("Invalid state: A login callback was received, but no login request was sent.")
+            }
+            guard let appleIDToken = appleIDCredential.identityToken else {
+                print("Unable to fetch identity token")
                 return
             }
-            
-            guard let user = result?.user, let idToken = user.idToken?.tokenString else { return }
-            
-            let credential = GoogleAuthProvider.credential(withIDToken: idToken, accessToken: user.accessToken.tokenString)
-            
-            Auth.auth().signIn(with: credential) { _,_ in
+            guard let idTokenString = String(data: appleIDToken, encoding: .utf8) else {
+                print("Unable to serialize token string from data: \(appleIDToken.debugDescription)")
+                return
+            }
+            // Initialize a Firebase credential, including the user's full name.
+            let credential = OAuthProvider.appleCredential(withIDToken: idTokenString,
+                                                            rawNonce: nonce,
+                                                            fullName: appleIDCredential.fullName)
+            // Sign in with Firebase.
+            Auth.auth().signIn(with: credential) { (authResult, error) in
+                if let error = error {
+                  // Error. If error.code == .MissingOrInvalidNonce, make sure
+                  // you're sending the SHA256-hashed nonce as a hex string with
+                  // your request to Apple.
+                    print(error.localizedDescription)
+                    return
+                }
+            // User is signed in to Firebase with Apple.
+            // ...
+              
                 self.dismiss(animated: true)
             }
         }
     }
+    
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        // Handle error.
+        print("Sign in with Apple errored: \(error)")
+    }
+    
 }
