@@ -21,8 +21,6 @@ import RxKakaoSDKUser
 import KakaoSDKAuth
 import KakaoSDKUser
 
-
-
 class RootViewController: UIViewController {
     
     let disposeBag = DisposeBag()
@@ -242,7 +240,6 @@ class RootViewController: UIViewController {
                 }
                 guard let oauthToken = oauthToken else { return }
                 let accessToken = oauthToken.accessToken
-                // 여기서 accessToken을 사용하여 Firebase 등에 로그인을 할 수 있습니다.
                 
                 self?.fetchKakaoUserInfo()
             }
@@ -254,7 +251,6 @@ class RootViewController: UIViewController {
                 }
                 guard let oauthToken = oauthToken else { return }
                 let accessToken = oauthToken.accessToken
-                // 여기서 accessToken을 사용하여 Firebase 등에 로그인을 할 수 있습니다.
                 
                 self?.fetchKakaoUserInfo()
             }
@@ -272,9 +268,7 @@ class RootViewController: UIViewController {
             let email = user.kakaoAccount?.email
             let nickname = user.kakaoAccount?.profile?.nickname
             let profileImage = user.kakaoAccount?.profile?.profileImageUrl
-            // 필요에 따라 사용자 정보를 활용하십시오.
             
-            // 예: 홈 뷰 컨트롤러로 이동하거나 사용자 정보를 표시합니다.
             DispatchQueue.main.async {
                 let alert = UIAlertController(title: "로그인 성공", message: "환영합니다, \(nickname ?? "사용자")!", preferredStyle: .alert)
                 let ok = UIAlertAction(title: "확인", style: .default) { _ in
@@ -368,8 +362,8 @@ extension RootViewController: ASAuthorizationControllerDelegate, ASAuthorization
         Array("0123456789ABCDEFGHIJKLMNOPQRSTUVXYZabcdefghijklmnopqrstuvwxyz-._")
 
         let nonce = randomBytes.map { byte in
-        // Pick a random character from the set, wrapping around if needed.
-        charset[Int(byte) % charset.count]
+
+            charset[Int(byte) % charset.count]
         }
 
         return String(nonce)
@@ -388,11 +382,9 @@ extension RootViewController: ASAuthorizationControllerDelegate, ASAuthorization
                 print("Unable to serialize token string from data: \(appleIDToken.debugDescription)")
                 return
             }
-            // Initialize a Firebase credential, including the user's full name.
             let credential = OAuthProvider.appleCredential(withIDToken: idTokenString,
                                                             rawNonce: nonce,
                                                             fullName: appleIDCredential.fullName)
-            // Sign in with Firebase.
             Auth.auth().signIn(with: credential) { (authResult, error) in
                 if let error = error {
                     print(error.localizedDescription)
@@ -406,7 +398,6 @@ extension RootViewController: ASAuthorizationControllerDelegate, ASAuthorization
     }
     
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
-        // Handle error.
         print("Sign in with Apple errored: \(error)")
     }
     
