@@ -11,11 +11,16 @@ import Then
 import RxSwift
 import RxCocoa
 import Firebase
-import GoogleSignIn
 import FirebaseAuth
 import FirebaseDatabaseInternal
+import GoogleSignIn
 import AuthenticationServices
 import Crypto
+import RxKakaoSDKAuth
+import RxKakaoSDKUser
+import KakaoSDKAuth
+import KakaoSDKUser
+
 
 
 class RootViewController: UIViewController {
@@ -27,6 +32,7 @@ class RootViewController: UIViewController {
     let userPassword = "test123"
     
     fileprivate var currentNonce: String?
+    
     
     // Properties
     private let titleLabel = UILabel().then {
@@ -213,7 +219,10 @@ class RootViewController: UIViewController {
         
         
         // MARK: - Kakao Login
-        
+        kakaoButton.rx.tap.subscribe(
+            onNext: { [weak self] in
+                self?.handleKakaoLogin()
+            }).disposed(by: disposeBag)
         
         
         // MARK: - Apple Login
@@ -221,11 +230,62 @@ class RootViewController: UIViewController {
             onNext: { [weak self] in
                 self?.startSignInWithAppleFlow()
             }).disposed(by: disposeBag)
-        
-        
-        
     }
     
+    // MARK: - Kakao Login
+    private func handleKakaoLogin() {
+        if UserApi.isKakaoTalkLoginAvailable() {
+            UserApi.shared.loginWithKakaoTalk { [weak self] oauthToken, error in
+                if let error = error {
+                    print("Login failed: \(error)")
+                    return
+                }
+                guard let oauthToken = oauthToken else { return }
+                let accessToken = oauthToken.accessToken
+                // 여기서 accessToken을 사용하여 Firebase 등에 로그인을 할 수 있습니다.
+                
+                self?.fetchKakaoUserInfo()
+            }
+        } else {
+            UserApi.shared.loginWithKakaoAccount { [weak self] oauthToken, error in
+                if let error = error {
+                    print("Login failed: \(error)")
+                    return
+                }
+                guard let oauthToken = oauthToken else { return }
+                let accessToken = oauthToken.accessToken
+                // 여기서 accessToken을 사용하여 Firebase 등에 로그인을 할 수 있습니다.
+                
+                self?.fetchKakaoUserInfo()
+            }
+        }
+    }
+
+    private func fetchKakaoUserInfo() {
+        UserApi.shared.me { [weak self] user, error in
+            if let error = error {
+                print("Failed to fetch user info: \(error)")
+                return
+            }
+            guard let user = user else { return }
+            
+            let email = user.kakaoAccount?.email
+            let nickname = user.kakaoAccount?.profile?.nickname
+            let profileImage = user.kakaoAccount?.profile?.profileImageUrl
+            // 필요에 따라 사용자 정보를 활용하십시오.
+            
+            // 예: 홈 뷰 컨트롤러로 이동하거나 사용자 정보를 표시합니다.
+            DispatchQueue.main.async {
+                let alert = UIAlertController(title: "로그인 성공", message: "환영합니다, \(nickname ?? "사용자")!", preferredStyle: .alert)
+                let ok = UIAlertAction(title: "확인", style: .default) { _ in
+                    let homeVC = HomeViewController()
+                    self?.navigationController?.pushViewController(homeVC, animated: true)
+                }
+                alert.addAction(ok)
+                self?.present(alert, animated: true, completion: nil)
+            }
+        }
+    }
     
     // MARK: - Google Login
     private func handleGoogleLogin() {
@@ -257,6 +317,9 @@ class RootViewController: UIViewController {
             }
         }
     }
+    
+    
+
 }
 
 // MARK: - Apple Login

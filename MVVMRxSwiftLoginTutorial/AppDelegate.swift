@@ -8,6 +8,9 @@
 import UIKit
 import Firebase
 import GoogleSignIn
+import RxKakaoSDKCommon
+import RxKakaoSDKAuth
+import KakaoSDKAuth
 
 @main
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -18,6 +21,11 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
         
         // Firebase 초기화
         FirebaseApp.configure()
+        
+        // 메인 번들에 있는 카카오 앱키 불러오기
+        let kakaoAppKey = Bundle.main.infoDictionary?["KAKAO_NATIVE_APP_KEY"] ?? ""
+        // 카카오 SDK 초기화
+        RxKakaoSDK.initSDK(appKey: kakaoAppKey as! String)
         
         return true
     }
@@ -31,6 +39,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
          if handled {
              return true
          }
+        
+        if (AuthApi.isKakaoTalkLoginUrl(url)) {
+            return AuthController.rx.handleOpenUrl(url: url)
+        }
          
          return false
      }

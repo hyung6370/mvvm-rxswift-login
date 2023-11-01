@@ -117,3 +117,5 @@ xcuserdata
 
 Info.plist
 GoogleService-Info.plist
+Config.xcconfig
+*.xcconfig
