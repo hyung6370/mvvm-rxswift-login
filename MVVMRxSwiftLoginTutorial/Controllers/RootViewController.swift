@@ -226,6 +226,8 @@ class RootViewController: UIViewController {
         
     }
     
+    
+    // MARK: - Google Login
     private func handleGoogleLogin() {
         guard let clientID = FirebaseApp.app()?.options.clientID else { return }
 
@@ -330,16 +332,12 @@ extension RootViewController: ASAuthorizationControllerDelegate, ASAuthorization
             // Sign in with Firebase.
             Auth.auth().signIn(with: credential) { (authResult, error) in
                 if let error = error {
-                  // Error. If error.code == .MissingOrInvalidNonce, make sure
-                  // you're sending the SHA256-hashed nonce as a hex string with
-                  // your request to Apple.
                     print(error.localizedDescription)
                     return
                 }
-            // User is signed in to Firebase with Apple.
-            // ...
-              
-                self.dismiss(animated: true)
+                
+                let homeVC = HomeViewController()
+                self.navigationController?.pushViewController(homeVC, animated: true)
             }
         }
     }
